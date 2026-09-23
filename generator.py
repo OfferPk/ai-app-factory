@@ -6,16 +6,29 @@ import requests
 import time
 import re
 
-# Do alag alag secrets se keys uthane ka tareeqa (comma ki zaroorat nahi)
-key1 = os.environ.get("GEMINI_API_KEY", "").strip()
-key2 = os.environ.get("GEMINI_API_KEY_2", "").strip()
+# Multiple keys ko fetch karne ka smart tareeqa (Dono methods support karega)
+keys_list = []
+# 1. Agar alag se GEMINI_API_KEY_2 di ho
+for env_name in ["GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3"]:
+    val = os.environ.get(env_name, "").strip()
+    if val and val not in keys_list:
+        keys_list.append(val)
 
-GEMINI_API_KEYS = [k for k in [key1, key2] if k]
+# 2. Agar aik hi variable mein comma se separate ki hon
+raw_combined = os.environ.get("GEMINI_API_KEYS", "")
+for k in raw_combined.split(","):
+    cleaned = k.strip()
+    if cleaned and cleaned not in keys_list:
+        keys_list.append(cleaned)
+
+GEMINI_API_KEYS = keys_list
 GH_TOKEN = os.environ.get("GH_TOKEN", "").strip()
 
 if not GEMINI_API_KEYS or not GH_TOKEN:
     print("❌ Error: Kam az kam aik GEMINI_API_KEY aur GH_TOKEN lazmi hai!")
     exit(1)
+
+print(f"🔑 Total {len(GEMINI_API_KEYS)} API Key(s) detect ho gayi hain.")
 
 headers_gh = {
     "Authorization": f"Bearer {GH_TOKEN}",
@@ -54,12 +67,12 @@ def get_ai_app():
         Do not add markdown codeblocks around the json. Output pure valid JSON only.
         """
         
-        # Har key ko baari baari check karein
+        # Har API key ko baari baari check karein
         for key_index, api_key in enumerate(GEMINI_API_KEYS):
-            print(f"🔑 API Key #{key_index + 1} istemal ki ja rahi hai...")
+            print(f"\n🔑 API Key #{key_index + 1} test ki ja rahi hai...")
             
             for model_name in models_to_try:
-                print(f"🎯 Test kiya ja raha hai model: {model_name}...")
+                print(f"🎯 Model: {model_name}...")
                 url = f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent?key={api_key}"
                 payload = {
                     "contents": [{"parts": [{"text": prompt}]}],
@@ -71,7 +84,7 @@ def get_ai_app():
                     data = res.json()
                     
                     if "error" not in data and "candidates" in data:
-                        print(f"✅ Gemini model '{model_name}' kamyabi se connect ho gaya!")
+                        print(f"✅ Kamyabi! Model '{model_name}' ne API Key #{key_index + 1} ke sath response de diya!")
                         raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
                         
                         try:
@@ -80,15 +93,21 @@ def get_ai_app():
                             cleaned_text = re.sub(r'[\x00-\x1f\x7f-\x9f]', ' ', raw_text)
                             return json.loads(cleaned_text, strict=False)
                     else:
-                        err_msg = data.get("error", {}).get("message", "Error")
+                        err_obj = data.get("error", {})
+                        err_msg = err_obj.get("message", "Error")
                         print(f"⚠️ {model_name} par response: {err_msg}")
+                        
+                        # Agar quota khatam ho jaye toh foran agli key par switch karne ke liye message print karein
+                        if "quota" in err_msg.lower() or "limit" in err_msg.lower():
+                            print(f"⚡ API Key #{key_index + 1} ki limit khatam ho chuki hai! Foran agli key par shift ho rahe hain...")
+                            break  # Is key ko chor kar foran agli key par chale jao
                 except Exception as e:
-                    print(f"⚠️ {model_name} fail hua: {e}")
+                    print(f"⚠️ Connection error: {e}")
                 
-                time.sleep(2)
+                time.sleep(1)
         
-        print("⏳ Sabhi models aur keys par filhal high demand hai. 10 seconds baad dobara try karte hain...")
-        time.sleep(10)
+        print("⏳ Sabhi keys aur models par filhal limit ya high demand hai. 15 seconds baad dobara try karte hain...")
+        time.sleep(15)
         attempt_round += 1
 
 def push_file(owner, repo, path, content, message):
@@ -122,7 +141,7 @@ def main():
         return
         
     print("3. Code files upload ki ja rahi hain...")
-    push_file(username, repo_name, "index.html", app_data["html_com"] if "html_com" in locals() else app_data["html_code"], "Add functional web application")
+    push_file(username, repo_name, "index.html", app_data["html_code"], "Add functional web application")
     push_file(username, repo_name, "README.md", app_data["readme"], "Add documentation")
     
     pages_url = f"https://api.github.com/repos/{username}/{repo_name}/pages"
