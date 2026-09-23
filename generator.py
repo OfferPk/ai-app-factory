@@ -3,6 +3,7 @@ import json
 import base64
 import random
 import requests
+import time
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 GH_TOKEN = os.environ.get("GH_TOKEN", "").strip()
@@ -38,11 +39,11 @@ def get_ai_app():
     Do not add markdown codeblocks around the json. Output pure valid JSON only.
     """
     
-    # Updated models list as per Google's latest recommendation
+    # Aapke Pro plan ke liye official Pro aur stable models ki list
     models_to_try = [
-        "gemini-3.6-flash",
-        "gemini-3.8-flash",
-        "gemini-3.5-flash"
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+        "gemini-2.0-flash"
     ]
     
     for model_name in models_to_try:
@@ -53,18 +54,22 @@ def get_ai_app():
             "generationConfig": {"temperature": 0.8, "responseMimeType": "application/json"}
         }
         
-        try:
-            res = requests.post(url, json=payload)
-            data = res.json()
-            if "error" not in data and "candidates" in data:
-                print(f"✅ جیمینائی ماڈل '{model_name}' کامیابی سے کنیکٹ ہو گیا!")
-                raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
-                return json.loads(raw_text)
-            else:
-                err_msg = data.get("error", {}).get("message", "Error")
-                print(f"⚠️ {model_name} پر رسپانس: {err_msg}")
-        except Exception as e:
-            print(f"⚠️ {model_name} فیل ہوا: {e}")
+        # 2 dafa try karne ka loop taake high demand temporary error bypass ho jaye
+        for attempt in range(2):
+            try:
+                res = requests.post(url, json=payload)
+                data = res.json()
+                if "error" not in data and "candidates" in data:
+                    print(f"✅ جیمینائی ماڈل '{model_name}' کامیابی سے کنیکٹ ہو گیا!")
+                    raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
+                    return json.loads(raw_text)
+                else:
+                    err_msg = data.get("error", {}).get("message", "Error")
+                    print(f"⚠️ {model_name} (attempt {attempt+1}) پر رسپانس: {err_msg}")
+                    time.sleep(3)
+            except Exception as e:
+                print(f"⚠️ {model_name} فیل ہوا: {e}")
+                time.sleep(3)
             
     print("❌ تمام جیمینائی ماڈلز فیل ہو گئے۔")
     exit(1)
@@ -99,7 +104,7 @@ def main():
         print("❌ ریپو بنانے میں مسئلہ:", r.text)
         return
         
-    print("3. کوڈ فائلیں اپ لوڈ کی جا رہی ہیں...")
+    print("3. کوڈ فائلیں اپ لوڈ کی جا रही हैं...")
     push_file(username, repo_name, "index.html", app_data["html_code"], "Add functional web application")
     push_file(username, repo_name, "README.md", app_data["readme"], "Add documentation")
     
