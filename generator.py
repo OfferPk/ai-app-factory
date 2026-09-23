@@ -38,11 +38,11 @@ def get_ai_app():
     Do not add markdown codeblocks around the json. Output pure valid JSON only.
     """
     
-    # Official aur active Gemini models ki sahi list
+    # Updated models list as per Google's latest recommendation
     models_to_try = [
-        "gemini-1.5-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-pro"
+        "gemini-3.6-flash",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash"
     ]
     
     for model_name in models_to_try:
