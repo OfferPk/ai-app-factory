@@ -6,9 +6,9 @@ import requests
 import time
 import re
 
-# Priority set karna: Sabse pehle GEMINI_API_KEY_2, phir GEMINI_API_KEY aur baqi
+# Priority set karna: Sabse pehle GEMINI_API_KEY_3, phir GEMINI_API_KEY_2 aur GEMINI_API_KEY
 keys_list = []
-priority_env_names = ["GEMINI_API_KEY_2", "GEMINI_API_KEY", "GEMINI_API_KEY_3"]
+priority_env_names = ["GEMINI_API_KEY_3", "GEMINI_API_KEY_2", "GEMINI_API_KEY"]
 
 for env_name in priority_env_names:
     val = os.environ.get(env_name, "").strip()
@@ -29,7 +29,7 @@ if not GEMINI_API_KEYS or not GH_TOKEN:
     print("❌ Error: Kam az kam aik API key aur GH_TOKEN lazmi hai!")
     exit(1)
 
-print(f"🔑 Total {len(GEMINI_API_KEYS)} API Key(s) detect ho gayi hain. (By default pehle GEMINI_API_KEY_2 use hogi)")
+print(f"🔑 Total {len(GEMINI_API_KEYS)} API Key(s) detect ho gayi hain. (By default pehle GEMINI_API_KEY_3 test hogi)")
 
 headers_gh = {
     "Authorization": f"Bearer {GH_TOKEN}",
@@ -81,8 +81,14 @@ def get_ai_app():
             if key_index in exhausted_keys:
                 continue
                 
-            # Pehli key yahan GEMINI_API_KEY_2 hogi (kyunki humne priority upar rakh di hai)
-            key_label = "GEMINI_API_KEY_2" if key_index == 0 else f"API Key #{key_index + 1}"
+            # Pehli key yahan GEMINI_API_KEY_3 hogi
+            if key_index == 0:
+                key_label = "GEMINI_API_KEY_3"
+            elif key_index == 1:
+                key_label = "GEMINI_API_KEY_2"
+            else:
+                key_label = f"API Key #{key_index + 1}"
+                
             print(f"\n🔑 {key_label} test ki ja rahi hai...")
             
             for model_name in models_to_try:
