@@ -6,13 +6,16 @@ import requests
 import time
 import re
 
-# Keys fetch karne ka smart tareeqa
+# Priority set karna: Sabse pehle GEMINI_API_KEY_2, phir GEMINI_API_KEY aur baqi
 keys_list = []
-for env_name in ["GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3"]:
+priority_env_names = ["GEMINI_API_KEY_2", "GEMINI_API_KEY", "GEMINI_API_KEY_3"]
+
+for env_name in priority_env_names:
     val = os.environ.get(env_name, "").strip()
     if val and val not in keys_list:
         keys_list.append(val)
 
+# Agar koi combined ya comma wali key ho toh usay bhi add kar lo
 raw_combined = os.environ.get("GEMINI_API_KEYS", "")
 for k in raw_combined.split(","):
     cleaned = k.strip()
@@ -23,10 +26,10 @@ GEMINI_API_KEYS = keys_list
 GH_TOKEN = os.environ.get("GH_TOKEN", "").strip()
 
 if not GEMINI_API_KEYS or not GH_TOKEN:
-    print("❌ Error: Kam az kam aik GEMINI_API_KEY aur GH_TOKEN lazmi hai!")
+    print("❌ Error: Kam az kam aik API key aur GH_TOKEN lazmi hai!")
     exit(1)
 
-print(f"🔑 Total {len(GEMINI_API_KEYS)} API Key(s) detect ho gayi hain.")
+print(f"🔑 Total {len(GEMINI_API_KEYS)} API Key(s) detect ho gayi hain. (By default pehle GEMINI_API_KEY_2 use hogi)")
 
 headers_gh = {
     "Authorization": f"Bearer {GH_TOKEN}",
@@ -46,7 +49,6 @@ def get_ai_app():
         "gemini-3.5-flash"
     ]
     
-    # Jin keys ki limit khatam ho chuki ho, unhein yahan track karenge
     exhausted_keys = set()
     attempt_round = 1
 
@@ -68,7 +70,6 @@ def get_ai_app():
         Do not add markdown codeblocks around the json. Output pure valid JSON only.
         """
         
-        # Agar saari keys ki limit khatam ho chuki ho, toh thoda wait karke list reset kar do
         if len(exhausted_keys) >= len(GEMINI_API_KEYS):
             print("⏳ Tamam API keys ki limit filhal khatam ho chuki hai. 20 seconds wait karke dobara koshish karte hain...")
             time.sleep(20)
@@ -76,12 +77,13 @@ def get_ai_app():
             attempt_round += 1
             continue
 
-        # Har API key ko baari baari check karein
         for key_index, api_key in enumerate(GEMINI_API_KEYS):
             if key_index in exhausted_keys:
-                continue  # Jo key block ho chuki hai usay skip karo
+                continue
                 
-            print(f"\n🔑 API Key #{key_index + 1} test ki ja rahi hai...")
+            # Pehli key yahan GEMINI_API_KEY_2 hogi (kyunki humne priority upar rakh di hai)
+            key_label = "GEMINI_API_KEY_2" if key_index == 0 else f"API Key #{key_index + 1}"
+            print(f"\n🔑 {key_label} test ki ja rahi hai...")
             
             for model_name in models_to_try:
                 print(f"🎯 Model: {model_name}...")
@@ -96,7 +98,7 @@ def get_ai_app():
                     data = res.json()
                     
                     if "error" not in data and "candidates" in data:
-                        print(f"✅ Kamyabi! Model '{model_name}' ne API Key #{key_index + 1} ke sath response de diya!")
+                        print(f"✅ Kamyabi! Model '{model_name}' ne {key_label} ke sath response de diya!")
                         raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
                         
                         try:
@@ -109,11 +111,10 @@ def get_ai_app():
                         err_msg = err_obj.get("message", "Error")
                         print(f"⚠️ {model_name} par response: {err_msg}")
                         
-                        # Agar quota exceed ho jaye toh is key ko block karke FORAN agli key par shift ho jao
                         if "quota" in err_msg.lower() or "limit" in err_msg.lower() or "exceeded" in err_msg.lower():
-                            print(f"⚡ API Key #{key_index + 1} ki limit khatam ho chuki hai! Foran doosri key par switch ho rahe hain...")
+                            print(f"⚡ {key_label} ki limit khatam ho chuki hai! Foran agli key par shift ho rahe hain...")
                             exhausted_keys.add(key_index)
-                            break  # Is model loop ko tor kar foran agli API key par jao
+                            break
                 except Exception as e:
                     print(f"⚠️ Connection error: {e}")
                 
