@@ -6,11 +6,13 @@ import requests
 import time
 import re
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+# Multiple API keys support (agar comma se separate karke dein)
+raw_keys = os.environ.get("GEMINI_API_KEYS", os.environ.get("GEMINI_API_KEY", ""))
+GEMINI_API_KEYS = [k.strip() for k in raw_keys.split(",") if k.strip()]
 GH_TOKEN = os.environ.get("GH_TOKEN", "").strip()
 
-if not GEMINI_API_KEY or not GH_TOKEN:
-    print("❌ ایرر: GEMINI_API_KEY یا GH_TOKEN خالی ہے!")
+if not GEMINI_API_KEYS or not GH_TOKEN:
+    print("❌ Error: GEMINI_API_KEY ya GH_TOKEN khali hai!")
     exit(1)
 
 headers_gh = {
@@ -24,21 +26,6 @@ def get_ai_app():
         "Interactive productivity timer", "2D retro canvas game", "Smart notes markdown editor",
         "Color palette generator for designers", "Workout fitness tracker"
     ]
-    chosen_cat = random.choice(categories)
-    
-    prompt = f"""
-    Create a unique, highly polished, beautiful single-page web app in the category: '{chosen_cat}'.
-    The app must be completely functional using HTML5, modern CSS, and vanilla JavaScript.
-    
-    You must respond ONLY with a strict JSON object with this exact structure:
-    {{
-      "repo_name": "short-clean-kebab-case-name",
-      "description": "One line catchy description of the app",
-      "html_code": "<!DOCTYPE html>...full working code...",
-      "readme": "# App Name\\n\\nDetailed description and how to use it."
-    }}
-    Do not add markdown codeblocks around the json. Output pure valid JSON only.
-    """
     
     models_to_try = [
         "gemini-3.6-flash",
@@ -46,39 +33,63 @@ def get_ai_app():
         "gemini-3.5-flash"
     ]
     
-    for model_name in models_to_try:
-        print(f"🎯 ٹیسٹ کیا جا رہا ہے ماڈل: {model_name}...")
-        url = f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.8, "responseMimeType": "application/json"}
-        }
+    # Infinite/Smart retry loop jab tak success na ho jaye
+    attempt_round = 1
+    while True:
+        print(f"\n🔄 --- Koshish Round {attempt_round} shuru ho rahi hai ---")
+        chosen_cat = random.choice(categories)
         
-        for attempt in range(2):
-            try:
-                res = requests.post(url, json=payload)
-                data = res.json()
-                if "error" not in data and "candidates" in data:
-                    print(f"✅ جیمینائی ماڈل '{model_name}' کامیابی سے کنیکٹ ہو گیا!")
-                    raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
-                    
-                    # Safe JSON parsing with control character cleanup
-                    try:
-                        return json.loads(raw_text, strict=False)
-                    except json.JSONDecodeError:
-                        # Agar koi control character ka masla ho toh usay clean kar ke dobara try karein
-                        cleaned_text = re.sub(r'[\x00-\x1f\x7f-\x9f]', ' ', raw_text)
-                        return json.loads(cleaned_text, strict=False)
-                else:
-                    err_msg = data.get("error", {}).get("message", "Error")
-                    print(f"⚠️ {model_name} (attempt {attempt+1}) پر رسپانس: {err_msg}")
-                    time.sleep(2)
-            except Exception as e:
-                print(f"⚠️ {model_name} فیل ہوا: {e}")
-                time.sleep(2)
+        prompt = f"""
+        Create a unique, highly polished, beautiful single-page web app in the category: '{chosen_cat}'.
+        The app must be completely functional using HTML5, modern CSS, and vanilla JavaScript.
+        
+        You must respond ONLY with a strict JSON object with this exact structure:
+        {{
+          "repo_name": "short-clean-kebab-case-name",
+          "description": "One line catchy description of the app",
+          "html_code": "<!DOCTYPE html>...full working code...",
+          "readme": "# App Name\\n\\nDetailed description and how to use it."
+        }}
+        Do not add markdown codeblocks around the json. Output pure valid JSON only.
+        """
+        
+        # Har key ko check karein
+        for key_index, api_key in enumerate(GEMINI_API_KEYS):
+            print(🔑 API Key #{key_index + 1} istemal ki ja rahi hai...)
             
-    print("❌ تمام جیمینائی ماڈلز فیل ہو گئے۔")
-    exit(1)
+            for model_name in models_to_try:
+                print(f"🎯 Test kiya ja raha hai model: {model_name}...")
+                url = f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent?key={api_key}"
+                payload = {
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"temperature": 0.8, "responseMimeType": "application/json"}
+                }
+                
+                try:
+                    res = requests.post(url, json=payload, timeout=30)
+                    data = res.json()
+                    
+                    if "error" not in data and "candidates" in data:
+                        print(f"✅ Gemini model '{model_name}' kamyabi se connect ho gaya!")
+                        raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
+                        
+                        try:
+                            return json.loads(raw_text, strict=False)
+                        except json.JSONDecodeError:
+                            cleaned_text = re.sub(r'[\x00-\x1f\x7f-\x9f]', ' ', raw_text)
+                            return json.loads(cleaned_text, strict=False)
+                    else:
+                        err_msg = data.get("error", {}).get("message", "Error")
+                        print(f"⚠️ {model_name} par response: {err_msg}")
+                except Exception as e:
+                    print(f"⚠️ {model_name} fail hua: {e}")
+                
+                # Model ke darmiyan chota waqfa
+                time.sleep(2)
+        
+        print("⏳ Sabhi models aur keys par filhal high demand hai. 10 seconds baad dobara try karte hain...")
+        time.sleep(10)
+        attempt_round += 1
 
 def push_file(owner, repo, path, content, message):
     b64_content = base64.b64encode(content.encode("utf-8")).decode("utf-8")
@@ -88,17 +99,17 @@ def push_file(owner, repo, path, content, message):
 def main():
     user_res = requests.get("https://api.github.com/user", headers=headers_gh)
     if user_res.status_code != 200:
-        print("❌ گٹ ہب ٹوکن ایرر: GH_TOKEN درست نہیں ہے!")
+        print("❌ GitHub Token Error: GH_TOKEN durust nahi hai!")
         exit(1)
         
     username = user_res.json()["login"]
     
-    print("1. جیمینائی سے نیا ایپ آئیڈیا اور کوڈ لیا جا रहा ہے...")
+    print("1. Gemini se naya app idea aur code liya ja raha hai...")
     app_data = get_ai_app()
     repo_name = f"{app_data['repo_name']}-{random.randint(100, 999)}"
-    print(f"✅ ایپ تیار ہوئی: {repo_name}")
+    print(f"✅ App tayar hui: {repo_name}")
     
-    print("2. نیا گٹ ہب ریپو بنایا جا رہا ہے...")
+    print("2. Naya GitHub repo banaya ja raha hai...")
     create_repo_url = "https://api.github.com/user/repos"
     repo_payload = {
         "name": repo_name,
@@ -107,18 +118,18 @@ def main():
     }
     r = requests.post(create_repo_url, headers=headers_gh, json=repo_payload)
     if r.status_code not in [200, 201]:
-        print("❌ ریپو بنانے میں مسئلہ:", r.text)
+        print("❌ Repo banane mein masla:", r.text)
         return
         
-    print("3. کوڈ فائلیں اپ لوڈ کی جا رہی ہیں...")
+    print("3. Code files upload ki ja rahi hain...")
     push_file(username, repo_name, "index.html", app_data["html_code"], "Add functional web application")
     push_file(username, repo_name, "README.md", app_data["readme"], "Add documentation")
     
-    # 4. لائیو ویب سائٹ آن کریں (GitHub Pages)
+    # 4. Live website on karein (GitHub Pages)
     pages_url = f"https://api.github.com/repos/{username}/{repo_name}/pages"
     requests.post(pages_url, headers=headers_gh, json={"source": {"branch": "main", "path": "/"}})
     
-    print(f"🎉 مبارک ہو! نئی ایپ لائیو اپ لوڈ ہو چکی ہے: https://{username}.github.io/{repo_name}/")
+    print(f"🎉 Mubarak ho! Nayi app live upload ho chuki hai: https://{username}.github.io/{repo_name}/")
 
 if __name__ == "__main__":
     main()
