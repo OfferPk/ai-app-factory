@@ -39,22 +39,22 @@ def get_ai_app():
     Do not add markdown codeblocks around the json. Output pure valid JSON only.
     """
     
-    # Aapke Pro plan ke liye official Pro aur stable models ki list
+    # Google ke naye recommend kiye gaye models ki list jo error mein diye gaye thay
     models_to_try = [
-        "gemini-1.5-pro",
-        "gemini-1.5-flash",
-        "gemini-2.0-flash"
+        "gemini-3.6-flash",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash"
     ]
     
     for model_name in models_to_try:
         print(f"🎯 ٹیسٹ کیا جا رہا ہے ماڈل: {model_name}...")
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
+        # Yahan v1beta ki jagah v1 endpoint istemal kiya hai jo paid aur naye models ko support karta hai
+        url = f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {"temperature": 0.8, "responseMimeType": "application/json"}
         }
         
-        # 2 dafa try karne ka loop taake high demand temporary error bypass ho jaye
         for attempt in range(2):
             try:
                 res = requests.post(url, json=payload)
@@ -66,10 +66,10 @@ def get_ai_app():
                 else:
                     err_msg = data.get("error", {}).get("message", "Error")
                     print(f"⚠️ {model_name} (attempt {attempt+1}) پر رسپانس: {err_msg}")
-                    time.sleep(3)
+                    time.sleep(2)
             except Exception as e:
                 print(f"⚠️ {model_name} فیل ہوا: {e}")
-                time.sleep(3)
+                time.sleep(2)
             
     print("❌ تمام جیمینائی ماڈلز فیل ہو گئے۔")
     exit(1)
@@ -104,7 +104,7 @@ def main():
         print("❌ ریپو بنانے میں مسئلہ:", r.text)
         return
         
-    print("3. کوڈ فائلیں اپ لوڈ کی جا रही हैं...")
+    print("3. کوڈ فائلیں اپ لوڈ کی جا رہی ہیں...")
     push_file(username, repo_name, "index.html", app_data["html_code"], "Add functional web application")
     push_file(username, repo_name, "README.md", app_data["readme"], "Add documentation")
     
