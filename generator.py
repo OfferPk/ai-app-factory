@@ -7,12 +7,8 @@ import requests
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 GH_TOKEN = os.environ.get("GH_TOKEN", "").strip()
 
-if not GEMINI_API_KEY:
-    print("❌ ایرر: GEMINI_API_KEY گٹ ہب سیکریٹس میں نہیں ملی یا خالی ہے!")
-    exit(1)
-
-if not GH_TOKEN:
-    print("❌ ایرر: GH_TOKEN گٹ ہب سیکریٹس میں نہیں ملا یا خالی ہے!")
+if not GEMINI_API_KEY or not GH_TOKEN:
+    print("❌ ایرر: GEMINI_API_KEY یا GH_TOKEN خالی ہے!")
     exit(1)
 
 headers_gh = {
@@ -20,7 +16,33 @@ headers_gh = {
     "Accept": "application/vnd.github.v3+json"
 }
 
+def get_best_gemini_model():
+    """گوگل کے سرور سے خودکار طریقے سے سب سے بہترین اور فعال ماڈل تلاش کرتا ہے"""
+    list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
+    try:
+        r = requests.get(list_url)
+        if r.status_code == 200:
+            models = r.json().get("models", [])
+            # پہلے Flash ماڈلز تلاش کریں
+            for m in models:
+                name = m.get("name", "").replace("models/", "")
+                methods = m.get("supportedGenerationMethods", [])
+                if "generateContent" in methods and "flash" in name.lower():
+                    return name
+            # ورنہ کوئی بھی فعال ماڈل لے لیں
+            for m in models:
+                name = m.get("name", "").replace("models/", "")
+                methods = m.get("supportedGenerationMethods", [])
+                if "generateContent" in methods:
+                    return name
+    except Exception as e:
+        print("ماڈل لسٹ لینے میں وارننگ:", e)
+    return "gemini-2.0-flash"
+
 def get_ai_app():
+    model_name = get_best_gemini_model()
+    print(f"🎯 گوگل کا فعال ماڈل منتخب ہوا: {model_name}")
+    
     categories = [
         "Financial calculator", "Crypto profit utility", "OSINT phone formatter tool",
         "Interactive productivity timer", "2D retro canvas game", "Smart notes markdown editor",
@@ -42,7 +64,7 @@ def get_ai_app():
     Do not add markdown codeblocks around the json. Output pure valid JSON only.
     """
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"temperature": 0.8, "responseMimeType": "application/json"}
@@ -52,7 +74,7 @@ def get_ai_app():
     data = res.json()
     
     if "error" in data:
-        print(f"❌ جیمینائی ایرر: {data['error'].get('message', 'نامعلوم خرابی')}")
+        print(f"❌ جیمینائی ایرر: {data['error'].get('message', 'خرابی')}")
         exit(1)
         
     raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
@@ -66,7 +88,7 @@ def push_file(owner, repo, path, content, message):
 def main():
     user_res = requests.get("https://api.github.com/user", headers=headers_gh)
     if user_res.status_code != 200:
-        print("❌ گٹ ہب ٹوکن ایرر: GH_TOKEN درست نہیں ہے یا ایکسپائر ہو گیا ہے!")
+        print("❌ گٹ ہب ٹوکن ایرر: GH_TOKEN درست نہیں ہے!")
         exit(1)
         
     username = user_res.json()["login"]
