@@ -15,7 +15,6 @@ for env_name in priority_env_names:
     if val and val not in keys_list:
         keys_list.append(val)
 
-# Agar koi combined ya comma wali key ho toh usay bhi add kar lo
 raw_combined = os.environ.get("GEMINI_API_KEYS", "")
 for k in raw_combined.split(","):
     cleaned = k.strip()
@@ -29,7 +28,7 @@ if not GEMINI_API_KEYS or not GH_TOKEN:
     print("❌ Error: Kam az kam aik API key aur GH_TOKEN lazmi hai!")
     exit(1)
 
-print(f"🔑 Total {len(GEMINI_API_KEYS)} API Key(s) detect ho gayi hain. (By default pehle GEMINI_API_KEY_3 test hogi)")
+print(f"🔑 Total {len(GEMINI_API_KEYS)} API Key(s) detect ho gayi hain.")
 
 headers_gh = {
     "Authorization": f"Bearer {GH_TOKEN}",
@@ -43,10 +42,9 @@ def get_ai_app():
         "Color palette generator for designers", "Workout fitness tracker"
     ]
     
+    # Sirf aik stable model rakhtay hain taake unnecessary requests na hon
     models_to_try = [
-        "gemini-3.6-flash",
-        "gemini-3.8-flash",
-        "gemini-3.5-flash"
+        "gemini-3.6-flash"
     ]
     
     exhausted_keys = set()
@@ -71,8 +69,8 @@ def get_ai_app():
         """
         
         if len(exhausted_keys) >= len(GEMINI_API_KEYS):
-            print("⏳ Tamam API keys ki limit filhal khatam ho chuki hai. 20 seconds wait karke dobara koshish karte hain...")
-            time.sleep(20)
+            print("⏳ Tamam API keys ki limit par cooldown chal raha hai. 30 seconds wait karte hain...")
+            time.sleep(30)
             exhausted_keys.clear()
             attempt_round += 1
             continue
@@ -81,7 +79,6 @@ def get_ai_app():
             if key_index in exhausted_keys:
                 continue
                 
-            # Pehli key yahan GEMINI_API_KEY_3 hogi
             if key_index == 0:
                 key_label = "GEMINI_API_KEY_3"
             elif key_index == 1:
@@ -118,13 +115,14 @@ def get_ai_app():
                         print(f"⚠️ {model_name} par response: {err_msg}")
                         
                         if "quota" in err_msg.lower() or "limit" in err_msg.lower() or "exceeded" in err_msg.lower():
-                            print(f"⚡ {key_label} ki limit khatam ho chuki hai! Foran agli key par shift ho rahe hain...")
+                            print(f"⚡ {key_label} ki limit exceed ho gayi hai! Is key ko chor kar agli key par shift ho rahe hain...")
                             exhausted_keys.add(key_index)
                             break
                 except Exception as e:
                     print(f"⚠️ Connection error: {e}")
                 
-                time.sleep(1)
+                # Rate limit (RPM) bachane ke liye har request ke baad 5 second ka waqfa zaroori hai
+                time.sleep(5)
         
         attempt_round += 1
 
