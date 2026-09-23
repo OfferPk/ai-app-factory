@@ -6,13 +6,15 @@ import requests
 import time
 import re
 
-# Multiple API keys support (agar comma se separate karke dein)
-raw_keys = os.environ.get("GEMINI_API_KEYS", os.environ.get("GEMINI_API_KEY", ""))
-GEMINI_API_KEYS = [k.strip() for k in raw_keys.split(",") if k.strip()]
+# Do alag alag secrets se keys uthane ka tareeqa (comma ki zaroorat nahi)
+key1 = os.environ.get("GEMINI_API_KEY", "").strip()
+key2 = os.environ.get("GEMINI_API_KEY_2", "").strip()
+
+GEMINI_API_KEYS = [k for k in [key1, key2] if k]
 GH_TOKEN = os.environ.get("GH_TOKEN", "").strip()
 
 if not GEMINI_API_KEYS or not GH_TOKEN:
-    print("❌ Error: GEMINI_API_KEY ya GH_TOKEN khali hai!")
+    print("❌ Error: Kam az kam aik GEMINI_API_KEY aur GH_TOKEN lazmi hai!")
     exit(1)
 
 headers_gh = {
@@ -33,7 +35,6 @@ def get_ai_app():
         "gemini-3.5-flash"
     ]
     
-    # Infinite/Smart retry loop jab tak success na ho jaye
     attempt_round = 1
     while True:
         print(f"\n🔄 --- Koshish Round {attempt_round} shuru ho rahi hai ---")
@@ -53,9 +54,9 @@ def get_ai_app():
         Do not add markdown codeblocks around the json. Output pure valid JSON only.
         """
         
-        # Har key ko check karein
+        # Har key ko baari baari check karein
         for key_index, api_key in enumerate(GEMINI_API_KEYS):
-            print(🔑 API Key #{key_index + 1} istemal ki ja rahi hai...)
+            print(f"🔑 API Key #{key_index + 1} istemal ki ja rahi hai...")
             
             for model_name in models_to_try:
                 print(f"🎯 Test kiya ja raha hai model: {model_name}...")
@@ -84,7 +85,6 @@ def get_ai_app():
                 except Exception as e:
                     print(f"⚠️ {model_name} fail hua: {e}")
                 
-                # Model ke darmiyan chota waqfa
                 time.sleep(2)
         
         print("⏳ Sabhi models aur keys par filhal high demand hai. 10 seconds baad dobara try karte hain...")
@@ -122,10 +122,9 @@ def main():
         return
         
     print("3. Code files upload ki ja rahi hain...")
-    push_file(username, repo_name, "index.html", app_data["html_code"], "Add functional web application")
+    push_file(username, repo_name, "index.html", app_data["html_com"] if "html_com" in locals() else app_data["html_code"], "Add functional web application")
     push_file(username, repo_name, "README.md", app_data["readme"], "Add documentation")
     
-    # 4. Live website on karein (GitHub Pages)
     pages_url = f"https://api.github.com/repos/{username}/{repo_name}/pages"
     requests.post(pages_url, headers=headers_gh, json={"source": {"branch": "main", "path": "/"}})
     
