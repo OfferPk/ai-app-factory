@@ -16,33 +16,7 @@ headers_gh = {
     "Accept": "application/vnd.github.v3+json"
 }
 
-def get_best_gemini_model():
-    """گوگل کے سرور سے خودکار طریقے سے سب سے بہترین اور فعال ماڈل تلاش کرتا ہے"""
-    list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
-    try:
-        r = requests.get(list_url)
-        if r.status_code == 200:
-            models = r.json().get("models", [])
-            # پہلے Flash ماڈلز تلاش کریں
-            for m in models:
-                name = m.get("name", "").replace("models/", "")
-                methods = m.get("supportedGenerationMethods", [])
-                if "generateContent" in methods and "flash" in name.lower():
-                    return name
-            # ورنہ کوئی بھی فعال ماڈل لے لیں
-            for m in models:
-                name = m.get("name", "").replace("models/", "")
-                methods = m.get("supportedGenerationMethods", [])
-                if "generateContent" in methods:
-                    return name
-    except Exception as e:
-        print("ماڈل لسٹ لینے میں وارننگ:", e)
-    return "gemini-2.0-flash"
-
 def get_ai_app():
-    model_name = get_best_gemini_model()
-    print(f"🎯 گوگل کا فعال ماڈل منتخب ہوا: {model_name}")
-    
     categories = [
         "Financial calculator", "Crypto profit utility", "OSINT phone formatter tool",
         "Interactive productivity timer", "2D retro canvas game", "Smart notes markdown editor",
@@ -64,21 +38,37 @@ def get_ai_app():
     Do not add markdown codeblocks around the json. Output pure valid JSON only.
     """
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.8, "responseMimeType": "application/json"}
-    }
+    # گوگل کا تجویز کردہ 3.6 اور آپ کا 3.8 ماڈل
+    models_to_try = [
+        "gemini-3.6-flash",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash",
+        "gemini-3.0-flash"
+    ]
     
-    res = requests.post(url, json=payload)
-    data = res.json()
-    
-    if "error" in data:
-        print(f"❌ جیمینائی ایرر: {data['error'].get('message', 'خرابی')}")
-        exit(1)
+    for model_name in models_to_try:
+        print(f"🎯 ٹیسٹ کیا جا رہا ہے ماڈل: {model_name}...")
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.8, "responseMimeType": "application/json"}
+        }
         
-    raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
-    return json.loads(raw_text)
+        try:
+            res = requests.post(url, json=payload)
+            data = res.json()
+            if "error" not in data and "candidates" in data:
+                print(f"✅ جیمینائی ماڈل '{model_name}' کامیابی سے کنیکٹ ہو گیا!")
+                raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
+                return json.loads(raw_text)
+            else:
+                err_msg = data.get("error", {}).get("message", "Error")
+                print(f"⚠️ {model_name} پر رسپانس: {err_msg}")
+        except Exception as e:
+            print(f"⚠️ {model_name} فیل ہوا: {e}")
+            
+    print("❌ تمام جیمینائی ماڈلز فیل ہو گئے۔")
+    exit(1)
 
 def push_file(owner, repo, path, content, message):
     b64_content = base64.b64encode(content.encode("utf-8")).decode("utf-8")
