@@ -4,6 +4,7 @@ import base64
 import random
 import requests
 import time
+import re
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 GH_TOKEN = os.environ.get("GH_TOKEN", "").strip()
@@ -39,7 +40,6 @@ def get_ai_app():
     Do not add markdown codeblocks around the json. Output pure valid JSON only.
     """
     
-    # Google ke naye recommend kiye gaye models ki list jo error mein diye gaye thay
     models_to_try = [
         "gemini-3.6-flash",
         "gemini-3.8-flash",
@@ -48,7 +48,6 @@ def get_ai_app():
     
     for model_name in models_to_try:
         print(f"🎯 ٹیسٹ کیا جا رہا ہے ماڈل: {model_name}...")
-        # Yahan v1beta ki jagah v1 endpoint istemal kiya hai jo paid aur naye models ko support karta hai
         url = f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
@@ -62,7 +61,14 @@ def get_ai_app():
                 if "error" not in data and "candidates" in data:
                     print(f"✅ جیمینائی ماڈل '{model_name}' کامیابی سے کنیکٹ ہو گیا!")
                     raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
-                    return json.loads(raw_text)
+                    
+                    # Safe JSON parsing with control character cleanup
+                    try:
+                        return json.loads(raw_text, strict=False)
+                    except json.JSONDecodeError:
+                        # Agar koi control character ka masla ho toh usay clean kar ke dobara try karein
+                        cleaned_text = re.sub(r'[\x00-\x1f\x7f-\x9f]', ' ', raw_text)
+                        return json.loads(cleaned_text, strict=False)
                 else:
                     err_msg = data.get("error", {}).get("message", "Error")
                     print(f"⚠️ {model_name} (attempt {attempt+1}) پر رسپانس: {err_msg}")
@@ -87,7 +93,7 @@ def main():
         
     username = user_res.json()["login"]
     
-    print("1. جیمینائی سے نیا ایپ آئیڈیا اور کوڈ لیا جا رہا ہے...")
+    print("1. جیمینائی سے نیا ایپ آئیڈیا اور کوڈ لیا جا रहा ہے...")
     app_data = get_ai_app()
     repo_name = f"{app_data['repo_name']}-{random.randint(100, 999)}"
     print(f"✅ ایپ تیار ہوئی: {repo_name}")
