@@ -6,15 +6,13 @@ import requests
 import time
 import re
 
-# Multiple keys ko fetch karne ka smart tareeqa (Dono methods support karega)
+# Keys fetch karne ka smart tareeqa
 keys_list = []
-# 1. Agar alag se GEMINI_API_KEY_2 di ho
 for env_name in ["GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3"]:
     val = os.environ.get(env_name, "").strip()
     if val and val not in keys_list:
         keys_list.append(val)
 
-# 2. Agar aik hi variable mein comma se separate ki hon
 raw_combined = os.environ.get("GEMINI_API_KEYS", "")
 for k in raw_combined.split(","):
     cleaned = k.strip()
@@ -48,7 +46,10 @@ def get_ai_app():
         "gemini-3.5-flash"
     ]
     
+    # Jin keys ki limit khatam ho chuki ho, unhein yahan track karenge
+    exhausted_keys = set()
     attempt_round = 1
+
     while True:
         print(f"\n🔄 --- Koshish Round {attempt_round} shuru ho rahi hai ---")
         chosen_cat = random.choice(categories)
@@ -67,8 +68,19 @@ def get_ai_app():
         Do not add markdown codeblocks around the json. Output pure valid JSON only.
         """
         
+        # Agar saari keys ki limit khatam ho chuki ho, toh thoda wait karke list reset kar do
+        if len(exhausted_keys) >= len(GEMINI_API_KEYS):
+            print("⏳ Tamam API keys ki limit filhal khatam ho chuki hai. 20 seconds wait karke dobara koshish karte hain...")
+            time.sleep(20)
+            exhausted_keys.clear()
+            attempt_round += 1
+            continue
+
         # Har API key ko baari baari check karein
         for key_index, api_key in enumerate(GEMINI_API_KEYS):
+            if key_index in exhausted_keys:
+                continue  # Jo key block ho chuki hai usay skip karo
+                
             print(f"\n🔑 API Key #{key_index + 1} test ki ja rahi hai...")
             
             for model_name in models_to_try:
@@ -97,17 +109,16 @@ def get_ai_app():
                         err_msg = err_obj.get("message", "Error")
                         print(f"⚠️ {model_name} par response: {err_msg}")
                         
-                        # Agar quota khatam ho jaye toh foran agli key par switch karne ke liye message print karein
-                        if "quota" in err_msg.lower() or "limit" in err_msg.lower():
-                            print(f"⚡ API Key #{key_index + 1} ki limit khatam ho chuki hai! Foran agli key par shift ho rahe hain...")
-                            break  # Is key ko chor kar foran agli key par chale jao
+                        # Agar quota exceed ho jaye toh is key ko block karke FORAN agli key par shift ho jao
+                        if "quota" in err_msg.lower() or "limit" in err_msg.lower() or "exceeded" in err_msg.lower():
+                            print(f"⚡ API Key #{key_index + 1} ki limit khatam ho chuki hai! Foran doosri key par switch ho rahe hain...")
+                            exhausted_keys.add(key_index)
+                            break  # Is model loop ko tor kar foran agli API key par jao
                 except Exception as e:
                     print(f"⚠️ Connection error: {e}")
                 
                 time.sleep(1)
         
-        print("⏳ Sabhi keys aur models par filhal limit ya high demand hai. 15 seconds baad dobara try karte hain...")
-        time.sleep(15)
         attempt_round += 1
 
 def push_file(owner, repo, path, content, message):
